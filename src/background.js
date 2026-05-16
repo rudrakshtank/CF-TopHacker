@@ -21,18 +21,22 @@ async function getHackTable(url) {
 async function getProblemIndices(contestId) {
   try {
     let response = await fetch(
-      `https://codeforces.com/api/contest.standings?contestId=${contestId}&from=1&count=1`
+      `https://codeforces.com/api/contest.standings?contestId=${contestId}`
     );
     let data = await response.json();
-    let probObj = data.result.problems;
     if (data.status === "OK") {
+      let probObj = data.result.problems;
       let probIndices = [];
       for (let i = 0; i < probObj.length; i++) {
         probIndices.push(probObj[i].index); // Collect problem indices
       }
       return { arr: probIndices }; // Return an object of the form { arr: [problem indices] }
     } else {
-      throw new Error("Failed to fetch problem indices");
+      if (data.comment) {
+        throw new Error(data.comment);
+      } else {
+        throw new Error("Failed to fetch problem indices");
+      }
     }
   } catch (error) {
     return { error: error.toString() }; // Return an object with an error message
