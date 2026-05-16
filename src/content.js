@@ -30,6 +30,8 @@
 
   let cachedData = null;
   let problemTotals = [];
+  let searchQuery = "";
+  let filteredHackerArray = [];
 
   // Select various elements from the DOM that will be removed/modified
   const standingsTable = document.querySelector(".datatable");
@@ -49,13 +51,15 @@
     let result = '<ul class="second-level-menu-list">';
 
     const listItems = ul.children;
-    for (let li of listItems) {
+    for (let i = 0; i < listItems.length; i++) {
+      let li = listItems[i];
       const a = li.querySelector("a");
       if (a) {
         let classAttribute = "";
-        if (a.innerHTML.trim() === "|")
+        if (a.innerHTML.trim() === "|") {
           //To prevent lavaLamp effect on pipe
           classAttribute = 'class="noLava"';
+        }
         result += `<li ${classAttribute}>  ${a.outerHTML}  </li>`;
       }
     }
@@ -85,8 +89,8 @@
     const errorMessage = "Hacks Data not found";
     const OKVerdict = "Successful";
     const NOKVerdict = "Unsuccessful";
-    hackTable = response.hackTable;
-    probIndices = response.probIndices;
+    let hackTable = response.hackTable;
+    let probIndices = response.probIndices;
     const parser = new DOMParser();
     const doc = parser.parseFromString(hackTable.html, "text/html");
     const hackTableBody = doc.querySelector(
@@ -122,13 +126,11 @@
           if (userInfo.length === 3) {
             //Case where user has ranks: CM,IM,IGM,LGM
             userRank = `${userInfo[0].trim()} ${userInfo[1].trim()}`;
-            // userHandle = userInfo[2].trim();
           } else if (userInfo.length === 4) {
             //Case where user has ranks: CM,IM,IGM,LGM and language is Russian
             userRank = `${userInfo[0].trim()} ${userInfo[2].trim()}`;
           } else {
             //Case where user has ranks: Unrated, Newbie, Pupil, Specialist, Expert, Master and Tourist
-
             userRank = userInfo[0].trim();
           }
           userHandle = userInfo[userInfo.length - 1].trim();
@@ -159,16 +161,17 @@
                 totalSuccess: 0,
                 totalFail: 0,
               };
-              for (let i = 0; i < probIndices.length; i++) {
-                objTemplate[probIndices[i]] = { successCount: 0, failCount: 0 };
+              for (let j = 0; j < probIndices.length; j++) {
+                objTemplate[probIndices[j]] = { successCount: 0, failCount: 0 };
               }
               hackers[userHandle] = objTemplate;
             }
             if (verdict === OKVerdict || verdict === "Успешный") {
               hackers[userHandle][problem].successCount++;
               hackers[userHandle].totalSuccess++;
-              hackDetails[userHandle][problem] =
-                hackDetails[userHandle][problem] || [];
+              if (!hackDetails[userHandle][problem]) {
+                  hackDetails[userHandle][problem] = [];
+              }
               hackDetails[userHandle][problem].push({
                 date: date,
                 verdict: full_verdict,
@@ -177,8 +180,9 @@
             } else if (verdict === NOKVerdict || verdict === "Неудачная") {
               hackers[userHandle][problem].failCount++;
               hackers[userHandle].totalFail++;
-              hackDetails[userHandle][problem] =
-                hackDetails[userHandle][problem] || [];
+              if (!hackDetails[userHandle][problem]) {
+                  hackDetails[userHandle][problem] = [];
+              }
               hackDetails[userHandle][problem].push({
                 date: date,
                 verdict: full_verdict,
@@ -191,7 +195,7 @@
       if (!hacksPresent) {
         return { error: errorMessage }; //No rows found for hacks
       }
-      hackerArray = Object.values(hackers);
+      let hackerArray = Object.values(hackers);
 
       // Calculate problem totals once
       problemTotals = probIndices.map((probIndex) => {
@@ -232,17 +236,74 @@
   }
 
   let alreadyRunning = false;
+
+  function updateTableView() {
+    if (!cachedData) {
+        return;
+    }
+
+    filteredHackerArray = cachedData.hackerArray.filter(hacker => {
+        if (hacker.handle.toLowerCase().includes(searchQuery.toLowerCase())) {
+            return true;
+        } else {
+            return false;
+        }
+    });
+
+    const existingTable = document.getElementById("hacksStandingsTable");
+    if (existingTable) {
+        //Remove the existing table if it is present, to refresh the hacks standings
+        existingTable.remove();
+    }
+
+    const existingPagination = document.querySelector(".pagination-controls");
+    if (existingPagination) {
+        existingPagination.remove();
+    }
+
+    let searchContainer = document.querySelector(".hacks-search-container");
+    if (!searchContainer) {
+        searchContainer = document.createElement("div");
+        searchContainer.className = "hacks-search-container";
+        searchContainer.style.marginBottom = "10px";
+        searchContainer.style.marginTop = "20px";
+        searchContainer.style.display = "flex";
+        searchContainer.style.justifyContent = "flex-end";
+
+        const searchInput = document.createElement("input");
+        searchInput.id = "hacksSearchInput";
+        searchInput.type = "text";
+        searchInput.placeholder = "Search by handle...";
+        searchInput.style.padding = "6px";
+        searchInput.style.width = "250px";
+        searchInput.style.borderRadius = "4px";
+        searchInput.style.border = "1px solid #ccc";
+        searchInput.value = searchQuery;
+
+        searchInput.addEventListener("input", (e) => {
+            searchQuery = e.target.value;
+            currentPage = 1;
+            updateTableView();
+        });
+
+        searchContainer.appendChild(searchInput);
+        parentNode.appendChild(searchContainer);
+    }
+
+    insertTable(filteredHackerArray, cachedData.probIndices, cachedData.contestId, cachedData.hacksWindow);
+  }
+
   function getAndInsertTable(event) {
     if (alreadyRunning) {
       return;
     }
     alreadyRunning = true;
-    console.log("Fetching Hacks Standings");
+    
     const existingTable = document.getElementById("hacksStandingsTable");
     if (existingTable) {
-      //Remove the existing table if it is present, to refresh the hacks standings
       existingTable.remove();
     }
+    
     //Removing other elements from the DOM
     if (standingsTable) {
       standingsTable.remove();
@@ -256,6 +317,7 @@
     if (contestStatus) {
       contestStatus.innerHTML = "Hacks Standings";
     }
+    
     let loader;
     if (!document.querySelector(".HacksLoader")) {
       loader = document.createElement("p");
@@ -270,14 +332,15 @@
     let loadingSign = setInterval(loaderFunc, 150);
 
     const contestId = window.location.pathname.split("/")[2]; //Extracting the contestId from the URL
+
     if (cachedData) {
       // Use cached data if available
-      insertTable(
-        cachedData.hackerArray,
-        cachedData.probIndices,
-        cachedData.contestId,
-        cachedData.hacksWindow
-      );
+      clearInterval(loadingSign);
+      if (loader) {
+        loader.remove();
+      }
+      updateTableView();
+      alreadyRunning = false;
     } else {
       // Fetch data from the background script if not cached
       chrome.runtime.sendMessage(
@@ -291,7 +354,7 @@
             if (response.hasOwnProperty("error")) {
               alert("Failed to fetch hacks standings data.\n" + response.error);
             } else {
-              parsingResult = parseResponse(response);
+              let parsingResult = parseResponse(response);
               if (parsingResult.hasOwnProperty("error")) {
                 alert(parsingResult.error);
               } else {
@@ -306,12 +369,7 @@
                   hacksWindow: hacksWindow,
                   contestId: contestId,
                 };
-                insertTable(
-                  parsingResult.arr,
-                  response.probIndices,
-                  contestId,
-                  hacksWindow
-                );
+                updateTableView();
               }
             }
           }
@@ -336,7 +394,11 @@
     // Previous button
     const prevButton = document.createElement("button");
     prevButton.textContent = "Previous";
-    prevButton.disabled = currentPage === 1;
+    if (currentPage === 1) {
+        prevButton.disabled = true;
+    } else {
+        prevButton.disabled = false;
+    }
     prevButton.onclick = () => changePage(currentPage - 1);
     paginationContainer.appendChild(prevButton);
 
@@ -349,7 +411,11 @@
     // Next button
     const nextButton = document.createElement("button");
     nextButton.textContent = "Next";
-    nextButton.disabled = currentPage === totalPages;
+    if (currentPage === totalPages || totalPages === 0) {
+        nextButton.disabled = true;
+    } else {
+        nextButton.disabled = false;
+    }
     nextButton.onclick = () => changePage(currentPage + 1);
     paginationContainer.appendChild(nextButton);
 
@@ -359,20 +425,13 @@
     }
     parentNode.appendChild(paginationContainer);
   }
+  
   function changePage(pageNumber) {
     currentPage = pageNumber;
     // Remove the existing table if it exists
-    const existingTable = document.getElementById("hacksStandingsTable");
-    if (existingTable) {
-      existingTable.remove();
-    }
-    insertTable(
-      cachedData.hackerArray,
-      cachedData.probIndices,
-      cachedData.contestId,
-      cachedData.hacksWindow
-    ); // Insert the table for the current page
+    updateTableView(); // Insert the table for the current page
   }
+  
   function insertTable(hackerArray, probIndices, contestId, hacksWindow) {
     const startIndex = (currentPage - 1) * usersPerPage;
     const paginatedHackerArray = hackerArray.slice(
@@ -388,6 +447,7 @@
 
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
+    
     // Creating the headers of the table
     const headers = ["Rank", "User", "Hacks"];
     probIndices.forEach((index) => {
@@ -411,20 +471,18 @@
 
     // Creating the body of the table
     const tbody = table.createTBody();
-    let totals = []; // Initialize totals for each problem
-    for (let i = 0; i < probIndices.length + 1; i++) {
-      totals.push({ success: 0, fail: 0 });
-    }
 
     paginatedHackerArray.forEach((hacker, index) => {
-      totals[0].success += hacker.totalSuccess;
-      totals[0].fail += hacker.totalFail;
       const rank = hacker.rank;
       const row = tbody.insertRow();
-      const currentUserHandle = document.querySelector('.lang-chooser > div:nth-of-type(2) > a:nth-of-type(1)').textContent.trim();
-      if (hacker.handle === currentUserHandle) {
-        row.style.backgroundColor = "#ddeeff"; // Apply highlight
+      const currentUserHandleElement = document.querySelector('.lang-chooser > div:nth-of-type(2) > a:nth-of-type(1)');
+      if (currentUserHandleElement) {
+          const currentUserHandle = currentUserHandleElement.textContent.trim();
+          if (hacker.handle === currentUserHandle) {
+              row.style.backgroundColor = "#ddeeff"; // Apply highlight
+          }
       }
+      
       const cells = [
         startIndex + index + 1,
         hacker.handle,
@@ -437,8 +495,6 @@
           hacker[probIndex].successCount,
           hacker[probIndex].failCount,
         ]);
-        totals[index + 1].success += hacker[probIndex].successCount;
-        totals[index + 1].fail += hacker[probIndex].failCount;
       });
 
       cells.forEach((value, index) => {
@@ -505,9 +561,31 @@
     let totalHacksFail = 0;
     const totalHacksCell = overallTotalRow.insertCell();
 
+    // Initialize totals for each problem
+    let currentProblemTotals = [];
+    for (let i = 0; i < probIndices.length; i++) {
+        currentProblemTotals.push({ success: 0, fail: 0 });
+    }
+
     hackerArray.forEach((hacker) => {
-      totalHacksSuccess += hacker.totalSuccess || 0;
-      totalHacksFail += hacker.totalFail || 0;
+      if (hacker.totalSuccess) {
+          totalHacksSuccess += hacker.totalSuccess;
+      }
+      if (hacker.totalFail) {
+          totalHacksFail += hacker.totalFail;
+      }
+      
+      for (let i = 0; i < probIndices.length; i++) {
+          let probIndex = probIndices[i].toUpperCase();
+          if (hacker[probIndex]) {
+              if (hacker[probIndex].successCount) {
+                  currentProblemTotals[i].success += hacker[probIndex].successCount;
+              }
+              if (hacker[probIndex].failCount) {
+                  currentProblemTotals[i].fail += hacker[probIndex].failCount;
+              }
+          }
+      }
     });
 
     // Display overall total hacks in the next cell
@@ -522,10 +600,19 @@
     totalHacksCell.style.fontWeight = "bold";
 
     // Insert individual problem totals starting from the next cell
-    for (let i = 0; i < problemTotals.length; i++) {
+    for (let i = 0; i < currentProblemTotals.length; i++) {
       const totalCell = overallTotalRow.insertCell();
-      const successCount = problemTotals[i].success || 0;
-      const failCount = problemTotals[i].fail || 0;
+      let successCount = 0;
+      let failCount = 0;
+      
+      if (currentProblemTotals[i]) {
+          if (currentProblemTotals[i].success) {
+              successCount = currentProblemTotals[i].success;
+          }
+          if (currentProblemTotals[i].fail) {
+              failCount = currentProblemTotals[i].fail;
+          }
+      }
 
       if (successCount === 0 && failCount === 0) {
         totalCell.innerHTML = `-`;
@@ -546,6 +633,7 @@
   }
 
   createButton();
+  
   //Reapplying the lavaLamp effect on the menu items
   setTimeout(() => {
     $(".second-level-menu-list").lavaLamp({
@@ -555,7 +643,6 @@
     let children = document.querySelector(".second-level-menu-list").children;
     if (children[0].className === children[1].className) {
       children[0].remove();
-      console.log("Removed");
     }
   }, 100);
 })();
