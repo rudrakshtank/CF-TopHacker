@@ -242,13 +242,15 @@
         return;
     }
 
-    filteredHackerArray = cachedData.hackerArray.filter(hacker => {
+    filteredHackerArray = cachedData.hackerArray.reduce((matches, hacker, index) => {
         if (hacker.handle.toLowerCase().includes(searchQuery.toLowerCase())) {
-            return true;
-        } else {
-            return false;
+            matches.push({
+                 ...hacker,
+                 originalRank: index + 1
+             });
         }
-    });
+        return matches;
+    }, []);
 
     const existingTable = document.getElementById("hacksStandingsTable");
     if (existingTable) {
@@ -273,6 +275,7 @@
         const searchInput = document.createElement("input");
         searchInput.id = "hacksSearchInput";
         searchInput.type = "text";
+        searchInput.setAttribute("aria-label", "Search by handle");
         searchInput.placeholder = "Search by handle...";
         searchInput.style.padding = "6px";
         searchInput.style.width = "250px";
@@ -408,6 +411,12 @@
     pageInfo.style.margin = "0 10px";
     paginationContainer.appendChild(pageInfo);
 
+    if (currentPage === totalPages || totalPages === 0) {
+        nextButton.disabled = true;
+    } else {
+        nextButton.disabled = false;
+    }
+    
     // Next button
     const nextButton = document.createElement("button");
     nextButton.textContent = "Next";
