@@ -21,7 +21,7 @@ async function getHackTable(url) {
 async function getProblemIndices(contestId) {
   try {
     let response = await fetch(
-      `https://codeforces.com/api/contest.standings?contestId=${contestId}`
+      `https://codeforces.com/api/contest.standings?contestId=${contestId}&from=1&count=1`
     );
     let data = await response.json();
     if (data.status === "OK") {
